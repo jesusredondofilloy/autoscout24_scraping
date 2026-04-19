@@ -13,20 +13,20 @@ class AutoScout24Scraper:
     _XPATH_FALLBACK = "//article[contains(@class, 'cldt-summary-full-item')]"
     _BASE_DOMAIN = "https://www.autoscout24.de"
 
-    def __init__(self, make, model, cat, year_from, year_to, body, gear,
-                 power_from, power_to, powertype, zip_list, zipr, headless=False):
+    def __init__(self, make, model, cat, year_from, year_to, mileage_from, mileage_to,
+                 body, gear, power_from, power_to, powertype, headless=False):
         self.make = make
         self.model = model          # label only — used for output file naming
         self.cat = cat              # e.g. "ma65mo16621" — encodes the model in DE URLs
         self.year_from = year_from
         self.year_to = year_to
-        self.body = body            # body type code (e.g. "5" = SUV)
-        self.gear = gear            # gearbox (A = automatic, M = manual)
+        self.mileage_from = mileage_from
+        self.mileage_to = mileage_to
+        self.body = body
+        self.gear = gear
         self.power_from = power_from
         self.power_to = power_to
         self.powertype = powertype
-        self.zip_list = zip_list
-        self.zipr = zipr
 
         self.listing_frame = pd.DataFrame(columns=[
             "make", "model", "mileage", "fuel-type", "first-registration", "price",
@@ -46,7 +46,7 @@ class AutoScout24Scraper:
             self.options.add_argument("--headless=new")
         self.browser = webdriver.Chrome(options=self.options)
 
-    def _build_url(self, zip_code=None, page=1):
+    def _build_url(self, page=1):
         params = [
             ('atype', 'C'),
             ('cy', 'D'),
@@ -57,21 +57,19 @@ class AutoScout24Scraper:
             ('sort', 'standard'),
             ('ustate', 'N,U'),
         ]
-        # Optional filters — only appended when set
         for key, val in [
             ('body', self.body),
             ('cat', self.cat),
             ('fregfrom', self.year_from),
             ('fregto', self.year_to),
             ('gear', self.gear),
+            ('mileagefrom', self.mileage_from),
+            ('mileageto', self.mileage_to),
             ('powerfrom', self.power_from),
             ('powerto', self.power_to),
         ]:
             if val:
                 params.append((key, val))
-
-        if zip_code:
-            params.extend([('zip', zip_code), ('zipr', self.zipr)])
 
         if page > 1:
             params.extend([('page', page), ('source', 'listpage_pagination')])
@@ -79,9 +77,6 @@ class AutoScout24Scraper:
             params.append(('source', 'homepage_search-mask'))
 
         return f"{self._BASE_DOMAIN}/lst/{self.make}?{urllib.parse.urlencode(params)}"
-
-    def generate_urls(self, num_pages, zip_code):
-        return [self._build_url(zip_code, page) for page in range(1, num_pages + 1)]
 
     def _find_listings(self):
         try:
@@ -106,16 +101,13 @@ class AutoScout24Scraper:
             return None
 
     def scrape(self, num_pages, verbose=False):
-        url_list = []
-        for zip_code in self.zip_list:
-            url_list.extend(self.generate_urls(num_pages, zip_code))
-
-        for webpage in url_list:
+        for page in range(1, num_pages + 1):
+            webpage = self._build_url(page)
             self.browser.get(webpage)
             listings = self._find_listings()
 
             if verbose:
-                print(f"[{webpage}] found {len(listings)} listings")
+                print(f"[page {page}] found {len(listings)} listings")
 
             rows = []
             for listing in listings:
