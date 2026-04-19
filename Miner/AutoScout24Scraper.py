@@ -1,4 +1,5 @@
 import time
+import urllib.parse
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
@@ -8,30 +9,30 @@ from selenium.common.exceptions import TimeoutException
 
 
 class AutoScout24Scraper:
-    # Primary: any article with a data-make attribute; fallback: legacy class name
     _XPATH_PRIMARY = "//article[@data-make]"
     _XPATH_FALLBACK = "//article[contains(@class, 'cldt-summary-full-item')]"
-    _BASE_DOMAIN = "https://www.autoscout24.it"
+    _BASE_DOMAIN = "https://www.autoscout24.de"
 
-    def __init__(self, make, model, version, year_from, year_to, power_from, power_to, powertype, zip_list, zipr,
-                 headless=False):
+    def __init__(self, make, model, cat, year_from, year_to, body, gear,
+                 power_from, power_to, powertype, zip_list, zipr, headless=False):
         self.make = make
-        self.model = model
-        self.version = version
+        self.model = model          # label only — used for output file naming
+        self.cat = cat              # e.g. "ma65mo16621" — encodes the model in DE URLs
         self.year_from = year_from
         self.year_to = year_to
+        self.body = body            # body type code (e.g. "5" = SUV)
+        self.gear = gear            # gearbox (A = automatic, M = manual)
         self.power_from = power_from
         self.power_to = power_to
         self.powertype = powertype
         self.zip_list = zip_list
         self.zipr = zipr
-        self.base_url = ("https://www.autoscout24.it/lst/{}/{}/ve_{}?atype=C&cy=I&damaged_listing=exclude&desc=0&"
-                         "fregfrom={}&fregto={}&powerfrom={}&powerto={}&powertype={}&sort=standard&"
-                         "source=homepage_search-mask&ustate=N%2CU&zip={}&zipr={}")
+
         self.listing_frame = pd.DataFrame(columns=[
             "make", "model", "mileage", "fuel-type", "first-registration", "price",
             "url", "guid", "transmission", "engine-size", "body-type", "seller-type"
         ])
+
         self.options = webdriver.ChromeOptions()
         self.options.add_argument("--incognito")
         self.options.add_argument("--ignore-certificate-errors")
@@ -45,15 +46,42 @@ class AutoScout24Scraper:
             self.options.add_argument("--headless=new")
         self.browser = webdriver.Chrome(options=self.options)
 
-    def generate_urls(self, num_pages, zip):
-        url_list = [self.base_url.format(self.make, self.model, self.version, self.year_from, self.year_to,
-                                         self.power_from, self.power_to, self.powertype, zip, self.zipr)]
-        for i in range(2, num_pages + 1):
-            url_to_add = (self.base_url.format(self.make, self.model, self.version, self.year_from, self.year_to,
-                                               self.power_from, self.power_to, self.powertype, zip, self.zipr) +
-                          f"&page={i}&sort=standard&source=listpage_pagination&ustate=N%2CU")
-            url_list.append(url_to_add)
-        return url_list
+    def _build_url(self, zip_code=None, page=1):
+        params = [
+            ('atype', 'C'),
+            ('cy', 'D'),
+            ('damaged_listing', 'exclude'),
+            ('desc', '0'),
+            ('ocs_listing', 'include'),
+            ('powertype', self.powertype),
+            ('sort', 'standard'),
+            ('ustate', 'N,U'),
+        ]
+        # Optional filters — only appended when set
+        for key, val in [
+            ('body', self.body),
+            ('cat', self.cat),
+            ('fregfrom', self.year_from),
+            ('fregto', self.year_to),
+            ('gear', self.gear),
+            ('powerfrom', self.power_from),
+            ('powerto', self.power_to),
+        ]:
+            if val:
+                params.append((key, val))
+
+        if zip_code:
+            params.extend([('zip', zip_code), ('zipr', self.zipr)])
+
+        if page > 1:
+            params.extend([('page', page), ('source', 'listpage_pagination')])
+        else:
+            params.append(('source', 'homepage_search-mask'))
+
+        return f"{self._BASE_DOMAIN}/lst/{self.make}?{urllib.parse.urlencode(params)}"
+
+    def generate_urls(self, num_pages, zip_code):
+        return [self._build_url(zip_code, page) for page in range(1, num_pages + 1)]
 
     def _find_listings(self):
         try:
@@ -79,8 +107,8 @@ class AutoScout24Scraper:
 
     def scrape(self, num_pages, verbose=False):
         url_list = []
-        for zip in self.zip_list:
-            url_list.extend(self.generate_urls(num_pages, zip))
+        for zip_code in self.zip_list:
+            url_list.extend(self.generate_urls(num_pages, zip_code))
 
         for webpage in url_list:
             self.browser.get(webpage)

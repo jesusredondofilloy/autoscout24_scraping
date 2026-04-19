@@ -23,7 +23,6 @@ def perform_regression(data_preprocessed):
     std_deviation_values = grouped_data['std']
     regression = MileagePriceRegression(mileage_values, average_price_values, std_deviation_values)
     predicted_prices, best_degree = regression.do_regression()
-    # Mileage-Price Plotting
     regression.plot_mileage_price(predicted_prices, best_degree)
 
 
@@ -38,8 +37,10 @@ def preprocess():
 
 
 def scrape_autoscout(zip_list):
-    scraper = AutoScout24Scraper(make, model, version, year_from, year_to, power_from, power_to, powertype, zip_list,
-                                 zipr, headless=headless)
+    scraper = AutoScout24Scraper(
+        make, model, cat, year_from, year_to, body, gear,
+        power_from, power_to, powertype, zip_list, zipr, headless=headless
+    )
     scraper.scrape(num_pages, verbose=True)
     scraper.save_to_csv(downloaded_listings_file)
     scraper.quit_browser()
@@ -47,29 +48,30 @@ def scrape_autoscout(zip_list):
 
 def where_to_search():
     handler = TextFileHandler(zip_list_file_path)
-    handler.load_data_csv()
-    zip_list = handler.export_capoluogo_column()
-    zip_list = [item.lower() for item in zip_list]
-    return zip_list
+    # dtype=str preserves leading zeros in German zip codes (e.g. 04109)
+    handler.load_data_csv(dtype={'Zip': str})
+    return handler.export_column('Zip')
 
 
 if __name__ == "__main__":
     # --- Search parameters ---
-    make = "audi"
-    model = "rs6"
-    version = ""
-    year_from = "2013"
-    year_to = "2018"
+    make = "skoda"
+    model = "skoda_test"        # label for output file only, does not affect the URL
+    cat = "ma65mo16621"         # model ID from AutoScout24 URL (cat= parameter)
+    year_from = "2020"
+    year_to = ""
+    body = "5"                  # body type: 1=sedan 2=hatchback 3=estate 4=van 5=SUV 6=cabrio 7=coupe
+    gear = "A"                  # gearbox: A=automatic, M=manual
     power_from = ""
     power_to = ""
     powertype = "kw"
 
     # --- Scraping options ---
-    num_pages = 20          # pages per location (20 locations × num_pages scraped)
-    zipr = 100              # search radius in km
-    headless = False        # set True to run Chrome without a visible window
+    num_pages = 3               # pages per zip code — keep low for testing
+    zipr = 200                  # search radius in km
+    headless = False            # set True to run Chrome without a visible window
 
-    zip_list_file_path = 'Miner/capoluoghi.csv'
+    zip_list_file_path = 'Miner/german_zips.csv'
     downloaded_listings_file = f'listings/listings_{make}_{model}.csv'
     output_file_preprocessed = f'listings/listings_{make}_{model}_preprocessed.csv'
 

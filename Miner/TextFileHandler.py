@@ -12,16 +12,15 @@ class TextFileHandler:
         except UnicodeDecodeError:
             print(f"Error: Unable to decode the file with encoding '{encoding}'.")
 
-    def load_data_csv(self):
-        self.df = pd.read_csv(self.file_path)
+    def load_data_csv(self, dtype=None):
+        self.df = pd.read_csv(self.file_path, dtype=dtype)
 
+    def export_column(self, column_name):
+        return self.df[column_name].astype(str).tolist()
+
+    # kept for backwards compatibility
     def export_comune_column(self):
-        if self.df is not None:
-            comune_column = self.df['Comune'].tolist()
-            return comune_column
-        else:
-            print("Data not loaded. Call load_data() first.")
+        return self.export_column('Comune')
 
     def export_capoluogo_column(self):
-        capoluogo_column = self.df['Capoluogo'].tolist()
-        return capoluogo_column
+        return self.export_column('Capoluogo')
