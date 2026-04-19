@@ -34,7 +34,7 @@ def preprocess():
 
 def scrape_autoscout():
     scraper = AutoScout24Scraper(
-        make, model, cat, year_from, year_to, km_from, km_to, price_to,
+        cats, year_from, year_to, km_from, km_to, price_to,
         body, gear, power_from, power_to, powertype, headless=headless
     )
     scraper.scrape(num_pages, verbose=True)
@@ -54,25 +54,31 @@ def ask_filters():
 
 
 if __name__ == "__main__":
+    # --- Models to search (add or remove cat IDs as needed) ---
+    cats = [
+        "ma16360mo76029",   # Mercedes E-Class Estate
+        "ma65mo16621",      # Skoda Superb Combi
+        "ma51520mo75320",   # VW Passat Variant
+        "ma74mo20338",      # VW Passat Variant (alt)
+    ]
+    search_label = "kombi_search"   # used for output file naming
+
     # --- Fixed search parameters ---
-    make = "skoda"
-    model = "skoda_test"        # label for output file only, does not affect the URL
-    cat = "ma65mo16621"         # model ID from the AutoScout24 URL (cat= parameter)
-    body = "5"                  # body type: 1=sedan 2=hatchback 3=estate 4=van 5=SUV 6=cabrio 7=coupe
-    gear = "A"                  # gearbox: A=automatic, M=manual
+    body = "5"              # body type filter as used on AutoScout24.de
+    gear = "A"              # gearbox: A=automatic, M=manual
     power_from = ""
     power_to = ""
     powertype = "kw"
 
     # --- Scraping options ---
-    num_pages = 3               # set to 20 for a full run (AutoScout24 max)
-    headless = False            # set True to run Chrome without a visible window
+    num_pages = 3           # set to 20 for a full run (AutoScout24 max)
+    headless = False        # set True to run Chrome without a visible window
 
     # --- Interactive filters ---
     year_from, year_to, km_from, km_to, price_to = ask_filters()
 
-    downloaded_listings_file = f'listings/listings_{make}_{model}.csv'
-    output_file_preprocessed = f'listings/listings_{make}_{model}_preprocessed.csv'
+    downloaded_listings_file = f'listings/listings_{search_label}.csv'
+    output_file_preprocessed = f'listings/listings_{search_label}_preprocessed.csv'
 
     if not os.path.exists("listings"):
         os.makedirs("listings")

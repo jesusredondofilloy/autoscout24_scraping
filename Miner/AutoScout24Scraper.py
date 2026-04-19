@@ -1,3 +1,4 @@
+import re
 import time
 import urllib.parse
 import pandas as pd
@@ -13,11 +14,9 @@ class AutoScout24Scraper:
     _XPATH_FALLBACK = "//article[contains(@class, 'cldt-summary-full-item')]"
     _BASE_DOMAIN = "https://www.autoscout24.de"
 
-    def __init__(self, make, model, cat, year_from, year_to, km_from, km_to, price_to,
+    def __init__(self, cats, year_from, year_to, km_from, km_to, price_to,
                  body, gear, power_from, power_to, powertype, headless=False):
-        self.make = make
-        self.model = model          # label only — used for output file naming
-        self.cat = cat              # e.g. "ma65mo16621" — encodes the model in DE URLs
+        self.cats = cats            # list of cat IDs, e.g. ["ma65mo16621", "ma74mo20338"]
         self.year_from = year_from
         self.year_to = year_to
         self.km_from = km_from
@@ -48,6 +47,18 @@ class AutoScout24Scraper:
             self.options.add_argument("--headless=new")
         self.browser = webdriver.Chrome(options=self.options)
 
+    def _build_mmmv(self):
+        """Build mmmv param from cat IDs: ma16360mo76029 -> 16360|||"""
+        seen, parts = set(), []
+        for cat in self.cats:
+            m = re.match(r'ma(\d+)mo', cat)
+            if m:
+                mid = m.group(1)
+                if mid not in seen:
+                    parts.append(f"{mid}|||")
+                    seen.add(mid)
+        return ','.join(parts) if parts else None
+
     def _build_url(self, page=1):
         params = [
             ('atype', 'C'),
@@ -61,12 +72,13 @@ class AutoScout24Scraper:
         ]
         for key, val in [
             ('body', self.body),
-            ('cat', self.cat),
+            ('cat', ','.join(self.cats)),
             ('fregfrom', self.year_from),
             ('fregto', self.year_to),
             ('gear', self.gear),
             ('kmfrom', self.km_from),
             ('kmto', self.km_to),
+            ('mmmv', self._build_mmmv()),
             ('powerfrom', self.power_from),
             ('powerto', self.power_to),
             ('priceto', self.price_to),
@@ -79,7 +91,7 @@ class AutoScout24Scraper:
         else:
             params.append(('source', 'homepage_search-mask'))
 
-        return f"{self._BASE_DOMAIN}/lst/{self.make}?{urllib.parse.urlencode(params)}"
+        return f"{self._BASE_DOMAIN}/lst?{urllib.parse.urlencode(params)}"
 
     def _accept_cookies(self):
         """Dismiss the GDPR cookie banner if it appears."""
@@ -110,8 +122,6 @@ class AutoScout24Scraper:
         return self.browser.find_elements("xpath", self._XPATH_FALLBACK)
 
     def _extract_url(self, listing):
-        # Target the listing detail link specifically — avoids picking up dealer/
-        # financing links or cookie-banner anchors that appear on early pages.
         for xpath in [
             ".//a[contains(@href, '/angebote/')]",
             ".//a[contains(@href, '/lst/')]",
@@ -149,7 +159,6 @@ class AutoScout24Scraper:
 
     def _extract_features(self, listing):
         """Equipment highlights, e.g. 'Elektrische Sitze, HU/AU neu, Isofix'."""
-        # Try a dedicated highlights/features container first
         for xpath in [
             ".//*[contains(@class,'highlights')]//li",
             ".//*[contains(@class,'features')]//li",
@@ -163,8 +172,6 @@ class AutoScout24Scraper:
                     return ", ".join(texts)
             except Exception:
                 continue
-
-        # Fallback: grab all <li> inside the article (usually only features)
         try:
             items = listing.find_elements("xpath", ".//li")
             texts = [el.text.strip() for el in items if el.text.strip()]
@@ -172,7 +179,6 @@ class AutoScout24Scraper:
                 return ", ".join(texts)
         except Exception:
             pass
-
         return None
 
     def scrape(self, num_pages, verbose=False):
@@ -180,7 +186,6 @@ class AutoScout24Scraper:
             webpage = self._build_url(page)
             self.browser.get(webpage)
 
-            # Cookie banner typically only appears on the very first page load
             if page == 1:
                 self._accept_cookies()
 
