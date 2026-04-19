@@ -13,15 +13,16 @@ class AutoScout24Scraper:
     _XPATH_FALLBACK = "//article[contains(@class, 'cldt-summary-full-item')]"
     _BASE_DOMAIN = "https://www.autoscout24.de"
 
-    def __init__(self, make, model, cat, year_from, year_to, mileage_from, mileage_to,
+    def __init__(self, make, model, cat, year_from, year_to, km_from, km_to, price_to,
                  body, gear, power_from, power_to, powertype, headless=False):
         self.make = make
         self.model = model          # label only — used for output file naming
         self.cat = cat              # e.g. "ma65mo16621" — encodes the model in DE URLs
         self.year_from = year_from
         self.year_to = year_to
-        self.mileage_from = mileage_from
-        self.mileage_to = mileage_to
+        self.km_from = km_from
+        self.km_to = km_to
+        self.price_to = price_to
         self.body = body
         self.gear = gear
         self.power_from = power_from
@@ -63,10 +64,11 @@ class AutoScout24Scraper:
             ('fregfrom', self.year_from),
             ('fregto', self.year_to),
             ('gear', self.gear),
-            ('mileagefrom', self.mileage_from),
-            ('mileageto', self.mileage_to),
+            ('kmfrom', self.km_from),
+            ('kmto', self.km_to),
             ('powerfrom', self.power_from),
             ('powerto', self.power_to),
+            ('priceto', self.price_to),
         ]:
             if val:
                 params.append((key, val))

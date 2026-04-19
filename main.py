@@ -34,7 +34,7 @@ def preprocess():
 
 def scrape_autoscout():
     scraper = AutoScout24Scraper(
-        make, model, cat, year_from, year_to, mileage_from, mileage_to,
+        make, model, cat, year_from, year_to, km_from, km_to, price_to,
         body, gear, power_from, power_to, powertype, headless=headless
     )
     scraper.scrape(num_pages, verbose=True)
@@ -48,8 +48,9 @@ def ask_filters():
     yt = input("  Registration year to   : ").strip()
     kf = input("  Mileage minimum (km)   : ").strip()
     kt = input("  Mileage maximum (km)   : ").strip()
+    pt = input("  Maximum price (€)      : ").strip()
     print()
-    return yf, yt, kf, kt
+    return yf, yt, kf, kt, pt
 
 
 if __name__ == "__main__":
@@ -64,11 +65,11 @@ if __name__ == "__main__":
     powertype = "kw"
 
     # --- Scraping options ---
-    num_pages = 20              # AutoScout24 returns at most 20 pages per search
+    num_pages = 3               # set to 20 for a full run (AutoScout24 max)
     headless = False            # set True to run Chrome without a visible window
 
     # --- Interactive filters ---
-    year_from, year_to, mileage_from, mileage_to = ask_filters()
+    year_from, year_to, km_from, km_to, price_to = ask_filters()
 
     downloaded_listings_file = f'listings/listings_{make}_{model}.csv'
     output_file_preprocessed = f'listings/listings_{make}_{model}_preprocessed.csv'
