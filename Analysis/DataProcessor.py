@@ -9,15 +9,19 @@ class DataProcessor:
         return pd.read_csv(self.input_file)
 
     def remove_duplicates(self, df):
-        columns_to_check_duplicates = ['make', 'model', 'mileage', 'fuel-type', 'first-registration']
-        return df.drop_duplicates(subset=columns_to_check_duplicates, keep='first')
+        if 'guid' in df.columns and df['guid'].notna().any():
+            return df.drop_duplicates(subset=['guid'], keep='first')
+        columns_to_check = ['make', 'model', 'mileage', 'fuel-type', 'first-registration']
+        return df.drop_duplicates(subset=columns_to_check, keep='first')
 
     def preprocess_data(self, df):
+        df = df.copy()
         df.loc[df['first-registration'] == 'new', 'mileage'] = 0
         return df[df['mileage'] != 'unknown'].reset_index(drop=True)
 
     def round(self, df, by):
-        df['mileage'] = df['mileage'].astype(int)
+        df = df.copy()
+        df['mileage'] = pd.to_numeric(df['mileage'], errors='coerce').fillna(0).astype(int)
         df['mileage_grouped'] = (df['mileage'] // by) * by
         return df
 

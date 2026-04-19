@@ -39,8 +39,8 @@ def preprocess():
 
 def scrape_autoscout(zip_list):
     scraper = AutoScout24Scraper(make, model, version, year_from, year_to, power_from, power_to, powertype, zip_list,
-                                 zipr)
-    scraper.scrape(num_pages, True)
+                                 zipr, headless=headless)
+    scraper.scrape(num_pages, verbose=True)
     scraper.save_to_csv(downloaded_listings_file)
     scraper.quit_browser()
 
@@ -54,6 +54,7 @@ def where_to_search():
 
 
 if __name__ == "__main__":
+    # --- Search parameters ---
     make = "audi"
     model = "rs6"
     version = ""
@@ -62,13 +63,16 @@ if __name__ == "__main__":
     power_from = ""
     power_to = ""
     powertype = "kw"
-    num_pages = 20
-    zipr = 100
+
+    # --- Scraping options ---
+    num_pages = 20          # pages per location (20 locations × num_pages scraped)
+    zipr = 100              # search radius in km
+    headless = False        # set True to run Chrome without a visible window
 
     zip_list_file_path = 'Miner/capoluoghi.csv'
     downloaded_listings_file = f'listings/listings_{make}_{model}.csv'
     output_file_preprocessed = f'listings/listings_{make}_{model}_preprocessed.csv'
-    # Create the "listings" folder if it doesn't exist
+
     if not os.path.exists("listings"):
         os.makedirs("listings")
 
