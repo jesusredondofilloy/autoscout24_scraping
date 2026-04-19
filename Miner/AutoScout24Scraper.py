@@ -5,7 +5,7 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 
 class AutoScout24Scraper:
@@ -30,8 +30,9 @@ class AutoScout24Scraper:
         self.powertype = powertype
 
         self.listing_frame = pd.DataFrame(columns=[
-            "make", "model", "mileage", "fuel-type", "first-registration", "price",
-            "url", "guid", "transmission", "engine-size", "body-type", "seller-type"
+            "make", "model", "version", "mileage", "fuel-type", "first-registration",
+            "price", "features", "url", "guid", "transmission", "engine-size",
+            "body-type", "seller-type"
         ])
 
         self.options = webdriver.ChromeOptions()
@@ -80,6 +81,22 @@ class AutoScout24Scraper:
 
         return f"{self._BASE_DOMAIN}/lst/{self.make}?{urllib.parse.urlencode(params)}"
 
+    def _accept_cookies(self):
+        """Dismiss the GDPR cookie banner if it appears."""
+        try:
+            btn = WebDriverWait(self.browser, 6).until(
+                EC.element_to_be_clickable((By.XPATH,
+                    "//*[@id='_evidon-accept-button' or "
+                    "contains(@class,'accept-all') or "
+                    "contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'alle akzeptieren') or "
+                    "contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'akzeptieren')]"
+                ))
+            )
+            btn.click()
+            time.sleep(1)
+        except TimeoutException:
+            pass
+
     def _find_listings(self):
         try:
             WebDriverWait(self.browser, 10).until(
@@ -93,19 +110,80 @@ class AutoScout24Scraper:
         return self.browser.find_elements("xpath", self._XPATH_FALLBACK)
 
     def _extract_url(self, listing):
+        # Target the listing detail link specifically — avoids picking up dealer/
+        # financing links or cookie-banner anchors that appear on early pages.
+        for xpath in [
+            ".//a[contains(@href, '/angebote/')]",
+            ".//a[contains(@href, '/lst/')]",
+            ".//a[@href]",
+        ]:
+            try:
+                link = listing.find_element("xpath", xpath)
+                href = link.get_attribute("href") or ""
+                if href and not href.startswith("http"):
+                    href = self._BASE_DOMAIN + href
+                if href:
+                    return href
+            except NoSuchElementException:
+                continue
+        return None
+
+    def _extract_version(self, listing):
+        """Subtitle below the model name, e.g. '2.0 TSI SportLine-Virt-Canton'."""
+        for xpath in [
+            ".//*[@data-testid='subheadline']",
+            ".//*[@data-testid='listing-version']",
+            ".//span[contains(@class,'version')]",
+            ".//p[contains(@class,'version')]",
+            ".//span[contains(@class,'subtitle')]",
+            ".//p[contains(@class,'subtitle')]",
+        ]:
+            try:
+                el = listing.find_element("xpath", xpath)
+                text = el.text.strip()
+                if text:
+                    return text
+            except NoSuchElementException:
+                continue
+        return None
+
+    def _extract_features(self, listing):
+        """Equipment highlights, e.g. 'Elektrische Sitze, HU/AU neu, Isofix'."""
+        # Try a dedicated highlights/features container first
+        for xpath in [
+            ".//*[contains(@class,'highlights')]//li",
+            ".//*[contains(@class,'features')]//li",
+            ".//*[contains(@class,'equipment')]//li",
+            ".//*[contains(@class,'highlight')]//li",
+        ]:
+            try:
+                items = listing.find_elements("xpath", xpath)
+                texts = [el.text.strip() for el in items if el.text.strip()]
+                if texts:
+                    return ", ".join(texts)
+            except Exception:
+                continue
+
+        # Fallback: grab all <li> inside the article (usually only features)
         try:
-            link = listing.find_element("xpath", ".//a[@href]")
-            href = link.get_attribute("href") or ""
-            if href and not href.startswith("http"):
-                href = self._BASE_DOMAIN + href
-            return href or None
+            items = listing.find_elements("xpath", ".//li")
+            texts = [el.text.strip() for el in items if el.text.strip()]
+            if texts:
+                return ", ".join(texts)
         except Exception:
-            return None
+            pass
+
+        return None
 
     def scrape(self, num_pages, verbose=False):
         for page in range(1, num_pages + 1):
             webpage = self._build_url(page)
             self.browser.get(webpage)
+
+            # Cookie banner typically only appears on the very first page load
+            if page == 1:
+                self._accept_cookies()
+
             listings = self._find_listings()
 
             if verbose:
@@ -116,10 +194,12 @@ class AutoScout24Scraper:
                 row = {
                     "make": listing.get_attribute("data-make"),
                     "model": listing.get_attribute("data-model"),
+                    "version": self._extract_version(listing),
                     "mileage": listing.get_attribute("data-mileage"),
                     "fuel-type": listing.get_attribute("data-fuel-type"),
                     "first-registration": listing.get_attribute("data-first-registration"),
                     "price": listing.get_attribute("data-price"),
+                    "features": self._extract_features(listing),
                     "url": self._extract_url(listing),
                     "guid": listing.get_attribute("data-guid"),
                     "transmission": listing.get_attribute("data-transmission"),
